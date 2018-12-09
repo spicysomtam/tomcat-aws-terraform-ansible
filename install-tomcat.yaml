@@ -15,7 +15,7 @@
 #   This only works with 'current' version; when oracle upgrades the version you need credentials and a valid cookie to download archived versions.
 #   The url also changes. So this is not a long term solution. So we put the versions we want in an s3 bucket, which bypasses all the oracle credentials nonsense.
 #    javaurl: http://download.oracle.com/otn-pub/java/jdk/{{javaver}}-b12/2787e4a523244c269598db4e85c51e0c/{{javarpm}}
-    bucket: spicysomtam
+    bucket: mybucket
     tomuser: tomcat8
     tomver: 8.0.53
     tomarc: apache-tomcat-{{tomver}}.tar.gz
@@ -52,7 +52,7 @@
       state: present
   - name: Download and install tomcat {{tomver}}
     unarchive:                                                                                                                                        
-      src: http://www-eu.apache.org/dist/tomcat/tomcat-8/v{{tomver}}/bin/{{tomarc}}
+      src: https://archive.apache.org/dist/tomcat/tomcat-8/v{{tomver}}/bin/{{tomarc}}
       dest: "{{tominstdir}}"
       remote_src: yes      
       creates: "{{tominstdir}}/{{tomuser}}"
