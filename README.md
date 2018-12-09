@@ -41,6 +41,6 @@ Then use `instance.tf_userdata` rather than `instance.tf` (eg rename the latter 
 
 # Thoughts on mixing terraform and ansible
 
-They do not seem to go well together, since ansible typically uses ssh, which needs to become available before we can connect to it.
+They do not seem to go well together, since ansible typically uses ssh, which needs to become available before we can connect to it. The answer might be to switch to an autoscaling group (asg), which will use a user data to provision the ec2 instances, and then you do not have to worry about the deploy of the ec2 instances. You could embed ansible in the user data. I prefer an asg, since it manages the additional/removal in load balancers, can be scaled up and down at will, and can be autoscaled based on some criteria (eg cpu, etc).
 
 To keep things simple it might be best to keep the orchestration and config management seperate. Eg use terraform to create your infra and then run ansible afterwards. 
