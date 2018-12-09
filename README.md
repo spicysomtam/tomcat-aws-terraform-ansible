@@ -37,7 +37,7 @@ We need a script to create a userdata script from our ansible playbook and templ
 ./create-userdata.sh
 ```
 
-Then use `instance.tf_userdata` rather than `instance.tf` (eg rename the latter to `.tf_remote`).
+Then use `instance.tf_userdata` rather than `instance.tf` (eg rename the latter to `.tf_remote`). This uses a user data rather than waiting for the ssh port to become available; however it does not include an autoscaling group or launch configuration.
 
 # Thoughts on mixing terraform and ansible
 
