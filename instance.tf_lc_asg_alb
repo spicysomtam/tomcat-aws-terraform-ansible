@@ -1,0 +1,201 @@
+resource "random_id" "x" {
+  byte_length = 4
+}
+
+resource "aws_iam_role" "ec2" {
+  name = "S3${var.s3bucket}-${local.sk}-${random_id.x.dec}"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy" "s3" {
+  name = "S3${var.s3bucket}-${local.sk}-${random_id.x.dec}"
+  role = "${aws_iam_role.ec2.name}"
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation"
+            ],
+            "Resource": [
+                "arn:aws:s3:::${var.s3bucket}",
+                "arn:aws:s3:::${var.s3bucket}/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+                "s3:GetObject",
+                "s3:GetObjectAcl",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::${var.s3bucket}",
+                "arn:aws:s3:::${var.s3bucket}/*"
+            ]
+        }
+    ]
+}
+EOF
+}
+
+resource "aws_iam_instance_profile" "ec2" {
+  name = "S3${var.s3bucket}-${local.sk}-${random_id.x.dec}"
+  role = "${aws_iam_role.ec2.name}"
+}
+
+resource "aws_security_group" "tomcat" {
+  name = "${local.sk}-${random_id.x.dec}"
+  description = "http:8080 and ssh access."
+
+  vpc_id = "${var.vpcid}"
+
+  # HTTP:8080 access from anywhere
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    security_groups = ["${aws_security_group.ext.id}"]
+  }
+
+  # ssh access from anywhere
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # outbound internet access
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags {
+    Name = "${local.sk}-${random_id.x.dec}"
+  }
+}
+
+# security group to access the ext lb
+resource "aws_security_group" "ext" {
+  name        = "${local.sk}-lbext"
+  description = "Access to ext lb."
+
+  vpc_id = "${var.vpcid}"
+
+  ingress {
+    from_port   = 80 
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # outbound internet access
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags {
+    Name = "${local.sk}-lbext"
+  }
+
+}
+
+resource "aws_lb" "ext" {
+  name = "${local.sk}-ext"
+  internal = false
+  load_balancer_type = "application"
+  subnets = ["${var.subnets}"]
+  security_groups    = ["${aws_security_group.ext.id}"]
+
+  tags {
+    Name = "${local.sk}-ext"
+  }
+}
+
+resource "aws_lb_target_group" "ext" {
+  name = "${local.sk}-ext"
+  port = "8080"
+  protocol = "HTTP"
+  vpc_id = "${var.vpcid}"
+  deregistration_delay = "10"
+
+  health_check {
+    path = "${var.health_endpoint}"
+    matcher = "${var.health_status_codes}"
+  }
+}
+
+resource "aws_lb_listener" "ext" {
+  port = "80"
+  protocol = "HTTP"
+  load_balancer_arn = "${aws_lb.ext.arn}"
+
+  default_action {
+    type = "forward"
+    target_group_arn = "${aws_lb_target_group.ext.arn}"
+  }
+}
+
+resource "aws_launch_configuration" "tomcat" {
+  name_prefix = "${local.sk}-"
+  image_id = "${var.ami}"
+  instance_type = "${var.inst_type}"
+  iam_instance_profile = "${aws_iam_instance_profile.ec2.name}"
+  security_groups = ["${aws_security_group.tomcat.id}"]
+  user_data       = "${file("userdata.sh")}"
+  key_name        = "${var.key_name}"
+  associate_public_ip_address = "true"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_autoscaling_group" "tomcat" {
+  name = "${local.sk}"
+  vpc_zone_identifier = ["${var.subnets}"]
+  max_size = "${var.asg_max}"
+  min_size = "${var.asg_min}"
+  desired_capacity = "${var.asg_desired}"
+  force_delete = true
+  launch_configuration = "${aws_launch_configuration.tomcat.name}"
+  target_group_arns = ["${aws_lb_target_group.ext.arn}"]
+
+  tags {
+    key = "Name",
+    value = "${local.sk}",
+    propagate_at_launch = true
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}

@@ -12,7 +12,7 @@ variable "vpcid" {
 }
 
 variable "subnets" {
-  default = ["subnet-xxx"]
+  default = ["subnet-aaa", "subnet-bbb", "subnet-ccc"]
 }
 
 variable "inst_type" {
@@ -29,4 +29,24 @@ variable "ssh_user" {
 }
 variable "ssh_key_private" {
   default = "~/.ssh/aws/mykeypair.pem"
+}
+
+variable "asg_min" {
+  default = "1"
+}
+
+variable "asg_max" {
+  default = "2"
+}
+
+variable "asg_desired" {
+  default = "1"
+}
+
+variable "health_endpoint" {
+  default = "/"
+}
+
+variable "health_status_codes" {
+  default = "200"
 }

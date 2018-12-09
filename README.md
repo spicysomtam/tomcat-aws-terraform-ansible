@@ -26,21 +26,34 @@ To destroy the stack, just run `terraform destroy`, and enter `yes` to confirm.
 
 If you update the config, you can run `terraform plan` to see what will be changed, and if you are happy with that, run `terraform apply` to apply the changes in aws.
 
-# Using an autoscaling group
+# instance.tf_userdata
 
-If you need an auto scaling group, load balancer, etc, take a look at the examples [here](https://github.com/terraform-providers/terraform-provider-aws/tree/master/examples).
+Swapping `instance.tf` for this will switch setting up the instance via ssh/ansible to using an ec2 instance userdata. Userdata is what ec2 uses to customise an instance when it is deployed. This means the deploy will not wait for the ssh port to become available on the instance, and thus is less problematic and a better way to deploy.
 
-An asg will have a launch config, with the userdata to launch instances. The launch config needs to spin up new instances on the fly and there is no human around to run the remote ansible! Thus we need to create a userdata script that runs ansible locally on the ec2 instance, rather than running ansible remotely. 
+The userdata still uses ansible.
 
-We need a script to create a userdata script from our ansible playbook and template. I have created a script for this:
-```
-./create-userdata.sh
-```
+The userdata script (`userdata.sh`) is created by running `./create_userdata.sh`. When the `userdata.sh` script is created, you should check the correct bucket name is being passed to the ansible playbook; if not edit the `userdata.sh` (or the `create_userdata.sh` script and re-run the script).
 
-Then use `instance.tf_userdata` rather than `instance.tf` (eg rename the latter to `.tf_remote`). This uses a user data rather than waiting for the ssh port to become available; however it does not include an autoscaling group or launch configuration.
+Personally, I think the userdata approach is much better than waiting for ssh to become available, and then provisioning it that way.
+
+# instance.tf_lc_asg_alb
+
+Swapping `instance.tf` for this will switch setting up the instance/s to using a launch config, userdata in the launch config, autoscaling group (asg) and application load balancer. This takes the deploy to the next level; service is provided via a load balancer, you can scale up and down as required, or on some criteria such as cpu load, etc.
+
+See notes on `instance.tf_userdata`, which apply to this deploy. 
+
+Asg min/max/desired, alb health point and status codes are set in the `variables.tf`. 
 
 # Thoughts on mixing terraform and ansible
 
-They do not seem to go well together, since ansible typically uses ssh, which needs to become available before we can connect to it. The answer might be to switch to an autoscaling group (asg), which will use a user data to provision the ec2 instances, and then you do not have to worry about the deploy of the ec2 instances. You could embed ansible in the user data. I prefer an asg, since it manages the additional/removal in load balancers, can be scaled up and down at will, and can be autoscaled based on some criteria (eg cpu, etc).
+They do not seem to go well together, since ansible typically uses ssh, which needs to become available before we can connect to it. 
 
-To keep things simple it might be best to keep the orchestration and config management seperate. Eg use terraform to create your infra and then run ansible afterwards. 
+Switching to using an ec2 instance userdata is much easier to implement and manage, but even so generating the userdata with ansible is a bit messy.
+
+Switching to an load balancer, launch config and autoscaling group (asg) is a much slicker deploy. I prefer this, since it manages the additional/removal in load balancers, can be scaled up and down at will, and can be autoscaled based on some criteria (eg cpu, etc).
+
+You could have your own baked ami's, but then you need to manage the images (building/storage/deploying into aws. etc).
+
+To keep things simple it might be best to keep the orchestration and config management seperate. 
+
+Kubernetes solves alot of these issues; containerized apps (no need for userdata and config management like ansible; you create a new image/layer), rolling updates are faster and much slicker than aws alb's/ec2 instances/lc's/asg's. Technology marches on!
